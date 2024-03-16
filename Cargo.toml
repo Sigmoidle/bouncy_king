@@ -1,0 +1,33 @@
+[package]
+name = "bouncy_king"
+version = "0.1.0"
+edition = "2021"
+exclude = ["dist", "build", "assets", "credits"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.13.0" }
+bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap" }
+bevy_ecs_ldtk = { git = "https://github.com/theshortcut/bevy_ecs_ldtk/", branch = "bevy-0.13" }
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+[build-dependencies]
+embed-resource = "1"
+
+[profile.release]
+lto = "thin"
+strip = true      # Automatically strip symbols from the binary.
+opt-level = "z"   # Optimize for size.
+panic = "abort"
+codegen-units = 1
+
+[patch.crates-io]
+bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap" }
