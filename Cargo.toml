@@ -10,6 +10,7 @@ exclude = ["dist", "build", "assets", "credits"]
 bevy = { version = "0.13.0" }
 bevy_ecs_tilemap = { git = "https://github.com/StarArawn/bevy_ecs_tilemap" }
 bevy_ecs_ldtk = { git = "https://github.com/theshortcut/bevy_ecs_ldtk/", branch = "bevy-0.13" }
+bevy_rapier2d = "0.25.0"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
