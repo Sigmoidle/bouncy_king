@@ -1,5 +1,7 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::cast_precision_loss)]
 
 use bevy::{asset::AssetMetaCheck, prelude::*, window::WindowResolution};
 use bevy_ecs_ldtk::prelude::*;
@@ -23,9 +25,9 @@ fn main() {
         })
         .register_ldtk_entity::<components::PlayerBundle>("Player")
         .register_ldtk_entity::<components::SnakeBundle>("Snake")
-        .register_ldtk_int_cell::<components::WallBundle>(1)
-        .register_ldtk_int_cell::<components::WallBundle>(2)
-        .register_ldtk_int_cell::<components::LadderBundle>(4)
+        .register_ldtk_int_cell::<components::WallBundle>(CollideEnums::RedBrick as i32)
+        .register_ldtk_int_cell::<components::WallBundle>(CollideEnums::BlueBrick as i32)
+        .register_ldtk_int_cell::<components::LadderBundle>(CollideEnums::Ladder as i32)
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, -2000.0),
             ..Default::default()
@@ -48,6 +50,10 @@ fn main() {
                 systems::ground_detection,
                 systems::detect_climb_range,
                 systems::ignore_gravity_if_climbing,
+                systems::update_player_animations,
+                systems::setup_player_animations,
+                systems::update_level_selection,
+                systems::camera_fit_inside_current_level,
             ),
         )
         .add_plugins(
@@ -66,9 +72,22 @@ fn main() {
         .add_plugins((
             LdtkPlugin,
             RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
+            RapierDebugRenderPlugin {
+                enabled: false,
+                ..default()
+            },
         ))
         .run();
 }
 
-const CAMERA_WORLD_SHAPE: Vec2 = Vec2 { x: 32.0, y: 18.0 };
-const BASE_RES: Vec2 = Vec2 { x: 960.0, y: 540.0 };
+const BASE_RES: Vec2 = Vec2 {
+    x: 1280.0,
+    y: 720.0,
+};
+
+enum CollideEnums {
+    RedBrick = 1,
+    BlueBrick,
+    Water,
+    Ladder,
+}

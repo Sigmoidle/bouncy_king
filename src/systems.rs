@@ -1,12 +1,13 @@
 use crate::components::{
-    Climbable, Climber, GameTouches, GroundDetection, GroundSensor, Player, Wall,
+    AnimationState, Climbable, Climber, GameTouches, GroundDetection, GroundSensor, Player,
+    PlayerAnimations, Wall,
 };
-use crate::CAMERA_WORLD_SHAPE;
+use benimator::FrameRate;
 use bevy::prelude::*;
-use bevy::render::camera::ScalingMode;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 pub fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
     cmd.spawn(LdtkWorldBundle {
@@ -16,15 +17,7 @@ pub fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
 }
 
 pub fn setup_camera(mut cmd: Commands) {
-    let mut camera_bundle = Camera2dBundle::default();
-    camera_bundle.projection.scaling_mode = ScalingMode::AutoMin {
-        min_width: CAMERA_WORLD_SHAPE.x,
-        min_height: CAMERA_WORLD_SHAPE.y,
-    };
-    camera_bundle.transform.translation.x += 960.0 / 4.0;
-    camera_bundle.transform.translation.y -= 540.0 / 4.0;
-    camera_bundle.projection.scale = 15.0;
-    cmd.spawn(camera_bundle);
+    cmd.spawn(Camera2dBundle::default());
 }
 
 pub fn touch_input(
@@ -39,10 +32,84 @@ pub fn touch_input(
         .collect::<Vec<Vec2>>();
 }
 
-// Generic system that takes a component as a parameter, and will despawn all entities with that component
-pub fn despawn_screen<T: Component>(to_despawn: Query<Entity, With<T>>, mut commands: Commands) {
-    for entity in &to_despawn {
-        commands.entity(entity).despawn_recursive();
+pub fn setup_player_animations(mut cmd: Commands, query: Query<Entity, Added<Player>>) {
+    let o = 22; // animation index offset in the sprite sheet
+    let player_animations = PlayerAnimations {
+        idle: benimator::Animation::from_indices((o + 12)..=(o + 13), FrameRate::from_fps(1.5)),
+        walk: benimator::Animation::from_indices((o + 1)..=(o + 4), FrameRate::from_fps(12.0)),
+        jump_prep: benimator::Animation::from_indices((o + 5)..=(o + 5), FrameRate::from_fps(12.0)),
+        jump_up: benimator::Animation::from_indices((o + 6)..=(o + 6), FrameRate::from_fps(12.0)),
+        jump_down: benimator::Animation::from_indices((o + 7)..=(o + 7), FrameRate::from_fps(12.0)),
+        jump_land: benimator::Animation::from_indices((o + 8)..=(o + 8), FrameRate::from_fps(12.0)),
+        hit: benimator::Animation::from_indices((o + 9)..(o + 10), FrameRate::from_fps(12.0)),
+        slash: benimator::Animation::from_indices(
+            [(o + 12), (o + 11), (o + 12), (o + 13)],
+            FrameRate::from_fps(12.0),
+        ),
+        punch: benimator::Animation::from_indices([(o + 14), (o + 12)], FrameRate::from_fps(12.0)),
+        run: benimator::Animation::from_indices((o + 15)..=(o + 18), FrameRate::from_fps(12.0)),
+        climb: benimator::Animation::from_indices((o + 19)..=(o + 22), FrameRate::from_fps(12.0)),
+    };
+
+    if let Ok(entity) = query.get_single() {
+        if let Some(mut entity_command) = cmd.get_entity(entity) {
+            entity_command
+                .insert(player_animations)
+                .insert(ActiveCollisionTypes::all());
+        }
+    }
+}
+
+pub fn update_player_animations(
+    time: Res<Time>,
+    mut query: Query<
+        (
+            &mut Sprite,
+            &Velocity,
+            &Climber,
+            &GroundDetection,
+            &mut AnimationState,
+            &mut TextureAtlas,
+            &PlayerAnimations,
+        ),
+        With<Player>,
+    >,
+) {
+    for (mut sprite, velocity, climbing, ground, mut player, mut atlas, animations) in &mut query {
+        let mut animation = &animations.idle;
+        let mut update_animation = true;
+
+        if velocity.linvel.x < -15.0 {
+            sprite.flip_x = true;
+        } else if velocity.linvel.x > 15.0 {
+            sprite.flip_x = false;
+        }
+        if ground.on_ground {
+            if velocity.linvel.x < -15.0 || velocity.linvel.x > 15.0 {
+                animation = &animations.walk;
+            }
+        } else if climbing.climbing {
+            if velocity.linvel.y == 0.0 {
+                animation = &animations.climb;
+                update_animation = false;
+            } else {
+                animation = &animations.climb;
+            }
+        } else if !ground.on_ground {
+            if velocity.linvel.y > 0.0 {
+                animation = &animations.jump_up;
+            } else if velocity.linvel.y <= 0.0 {
+                animation = &animations.jump_down;
+            }
+        }
+
+        if update_animation {
+            player.update(animation, time.delta());
+        } else {
+            player.update(animation, Duration::ZERO);
+        }
+
+        atlas.index = player.frame_index();
     }
 }
 
@@ -50,30 +117,198 @@ pub fn despawn_screen<T: Component>(to_despawn: Query<Entity, With<T>>, mut comm
 
 pub fn movement(
     input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Velocity, &mut Climber, &GroundDetection), With<Player>>,
+    mut query: Query<
+        (
+            &mut Transform,
+            &mut Velocity,
+            &mut Climber,
+            &GroundDetection,
+        ),
+        With<Player>,
+    >,
 ) {
-    for (mut velocity, mut climber, ground_detection) in &mut query {
+    for (mut transform, mut velocity, mut climber, ground_detection) in &mut query {
         let right = if input.pressed(KeyCode::KeyD) { 1. } else { 0. };
         let left = if input.pressed(KeyCode::KeyA) { 1. } else { 0. };
 
-        velocity.linvel.x = (right - left) * 200.;
+        velocity.linvel.x += (right - left) * 15.0 + 0.5 * ((right - left) * 15.0);
+        velocity.linvel.x = velocity.linvel.x.clamp(-150.0, 150.0);
 
         if climber.intersecting_climbables.is_empty() {
             climber.climbing = false;
-        } else if input.just_pressed(KeyCode::KeyW) || input.just_pressed(KeyCode::KeyS) {
+        } else if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::KeyS) {
             climber.climbing = true;
+            velocity.linvel.x = 0.0;
+            let climb_x_location = climber
+                .intersecting_climbables
+                .iter()
+                .next()
+                .map(|a| a.1.translation.x + 2.5 * a.1.scale.x);
+            if let Some(x) = climb_x_location {
+                transform.translation.x = x + 5.0 * transform.scale.x;
+            }
         }
 
         if climber.climbing {
             let up = if input.pressed(KeyCode::KeyW) { 1. } else { 0. };
             let down = if input.pressed(KeyCode::KeyS) { 1. } else { 0. };
 
-            velocity.linvel.y = (up - down) * 200.;
+            velocity.linvel.y = (up - down) * 150.;
         }
 
         if input.just_pressed(KeyCode::Space) && (ground_detection.on_ground || climber.climbing) {
-            velocity.linvel.y = 500.;
+            velocity.linvel.y = 400.;
             climber.climbing = false;
+        }
+        velocity.linvel.y = velocity.linvel.y.clamp(-400., 400.);
+    }
+}
+
+pub fn spawn_ground_sensor(
+    mut commands: Commands,
+    detect_ground_for: Query<(Entity, &Collider), Added<GroundDetection>>,
+) {
+    for (entity, shape) in &detect_ground_for {
+        if let Some(cuboid) = shape.as_cuboid() {
+            let Vec2 {
+                x: half_extents_x,
+                y: half_extents_y,
+            } = cuboid.half_extents();
+
+            let detector_shape = Collider::cuboid(half_extents_x / 2.0, 2.);
+
+            let sensor_translation = Vec3::new(0., -half_extents_y, 0.);
+            commands.entity(entity).with_children(|builder| {
+                builder
+                    .spawn_empty()
+                    .insert(ActiveEvents::COLLISION_EVENTS)
+                    .insert(ActiveCollisionTypes::all())
+                    .insert(detector_shape)
+                    .insert(Sensor)
+                    .insert(Transform::from_translation(sensor_translation))
+                    .insert(GlobalTransform::default())
+                    .insert(GroundSensor {
+                        ground_detection_entity: entity,
+                        intersecting_ground_entities: HashSet::new(),
+                    });
+            });
+        } else if let Some(round) = shape.as_capsule() {
+            let half_extents_x = round.radius();
+            let half_extents_y = round.half_height() + half_extents_x;
+
+            let detector_shape = Collider::cuboid(half_extents_x / 2.0, 2.);
+
+            let sensor_translation = Vec3::new(0., -half_extents_y, 0.);
+            commands.entity(entity).with_children(|builder| {
+                builder
+                    .spawn_empty()
+                    .insert(ActiveEvents::COLLISION_EVENTS)
+                    .insert(ActiveCollisionTypes::all())
+                    .insert(detector_shape)
+                    .insert(Sensor)
+                    .insert(Transform::from_translation(sensor_translation))
+                    .insert(GlobalTransform::default())
+                    .insert(GroundSensor {
+                        ground_detection_entity: entity,
+                        intersecting_ground_entities: HashSet::new(),
+                    });
+            });
+        }
+    }
+}
+
+pub fn update_on_ground(
+    mut ground_detectors: Query<&mut GroundDetection>,
+    ground_sensors: Query<&GroundSensor, Changed<GroundSensor>>,
+) {
+    for sensor in &ground_sensors {
+        if let Ok(mut ground_detection) = ground_detectors.get_mut(sensor.ground_detection_entity) {
+            ground_detection.on_ground = !sensor.intersecting_ground_entities.is_empty();
+        }
+    }
+}
+
+pub fn ground_detection(
+    mut ground_sensors: Query<&mut GroundSensor>,
+    mut collisions: EventReader<CollisionEvent>,
+    collidables: Query<Entity, (With<Collider>, Without<Sensor>)>,
+) {
+    for collision_event in collisions.read() {
+        match collision_event {
+            CollisionEvent::Started(e1, e2, _) => {
+                if collidables.contains(*e1) {
+                    if let Ok(mut sensor) = ground_sensors.get_mut(*e2) {
+                        sensor.intersecting_ground_entities.insert(*e1);
+                    }
+                } else if collidables.contains(*e2) {
+                    if let Ok(mut sensor) = ground_sensors.get_mut(*e1) {
+                        sensor.intersecting_ground_entities.insert(*e2);
+                    }
+                }
+            }
+            CollisionEvent::Stopped(e1, e2, _) => {
+                if collidables.contains(*e1) {
+                    if let Ok(mut sensor) = ground_sensors.get_mut(*e2) {
+                        sensor.intersecting_ground_entities.remove(e1);
+                    }
+                } else if collidables.contains(*e2) {
+                    if let Ok(mut sensor) = ground_sensors.get_mut(*e1) {
+                        sensor.intersecting_ground_entities.remove(e2);
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn detect_climb_range(
+    mut climbers: Query<&mut Climber>,
+    climbables: Query<(Entity, &Transform), With<Climbable>>,
+    mut collisions: EventReader<CollisionEvent>,
+) {
+    for collision in collisions.read() {
+        match collision {
+            CollisionEvent::Started(collider_a, collider_b, _) => {
+                if let (Ok(mut climber), Ok(climbable)) =
+                    (climbers.get_mut(*collider_a), climbables.get(*collider_b))
+                {
+                    climber
+                        .intersecting_climbables
+                        .insert(climbable.0, *climbable.1);
+                }
+                if let (Ok(mut climber), Ok(climbable)) =
+                    (climbers.get_mut(*collider_b), climbables.get(*collider_a))
+                {
+                    climber
+                        .intersecting_climbables
+                        .insert(climbable.0, *climbable.1);
+                };
+            }
+            CollisionEvent::Stopped(collider_a, collider_b, _) => {
+                if let (Ok(mut climber), Ok(climbable)) =
+                    (climbers.get_mut(*collider_a), climbables.get(*collider_b))
+                {
+                    climber.intersecting_climbables.remove(&climbable.0);
+                }
+
+                if let (Ok(mut climber), Ok(climbable)) =
+                    (climbers.get_mut(*collider_b), climbables.get(*collider_a))
+                {
+                    climber.intersecting_climbables.remove(&climbable.0);
+                }
+            }
+        }
+    }
+}
+
+pub fn ignore_gravity_if_climbing(
+    mut query: Query<(&Climber, &mut GravityScale), Changed<Climber>>,
+) {
+    for (climber, mut gravity_scale) in &mut query {
+        if climber.climbing {
+            gravity_scale.0 = 0.0;
+        } else {
+            gravity_scale.0 = 1.0;
         }
     }
 }
@@ -236,7 +471,7 @@ pub fn spawn_wall_collision(
                                     / 2.,
                             ))
                             .insert(RigidBody::Fixed)
-                            .insert(Friction::new(1.0))
+                            .insert(Friction::new(0.3))
                             .insert(Transform::from_xyz(
                                 (wall_rect.left + wall_rect.right + 1) as f32 * grid_size as f32
                                     / 2.,
@@ -244,7 +479,8 @@ pub fn spawn_wall_collision(
                                     / 2.,
                                 0.,
                             ))
-                            .insert(GlobalTransform::default());
+                            .insert(GlobalTransform::default())
+                            .insert(ActiveEvents::COLLISION_EVENTS);
                     }
                 });
             }
@@ -252,126 +488,108 @@ pub fn spawn_wall_collision(
     }
 }
 
-pub fn spawn_ground_sensor(
-    mut commands: Commands,
-    detect_ground_for: Query<(Entity, &Collider), Added<GroundDetection>>,
+pub fn camera_fit_inside_current_level(
+    mut camera_query: Query<
+        (
+            &mut bevy::render::camera::OrthographicProjection,
+            &mut Transform,
+        ),
+        Without<Player>,
+    >,
+    player_query: Query<&Transform, With<Player>>,
+    level_query: Query<(&Transform, &LevelIid), (Without<OrthographicProjection>, Without<Player>)>,
+    ldtk_projects: Query<&Handle<LdtkProject>>,
+    level_selection: Res<LevelSelection>,
+    ldtk_project_assets: Res<Assets<LdtkProject>>,
+    window: Query<&Window>,
 ) {
-    for (entity, shape) in &detect_ground_for {
-        if let Some(cuboid) = shape.as_cuboid() {
-            let Vec2 {
-                x: half_extents_x,
-                y: half_extents_y,
-            } = cuboid.half_extents();
+    if let Ok(Transform {
+        translation: player_translation,
+        ..
+    }) = player_query.get_single()
+    {
+        // This can be optimised
+        let window = window.single();
+        let width = window.resolution.width();
+        let height = window.resolution.height();
+        let aspect_ratio = width / height;
 
-            let detector_shape = Collider::cuboid(half_extents_x / 2.0, 2.);
+        let player_translation = *player_translation;
 
-            let sensor_translation = Vec3::new(0., -half_extents_y, 0.);
+        let (mut orthographic_projection, mut camera_transform) = camera_query.single_mut();
 
-            commands.entity(entity).with_children(|builder| {
-                builder
-                    .spawn_empty()
-                    .insert(ActiveEvents::COLLISION_EVENTS)
-                    .insert(detector_shape)
-                    .insert(Sensor)
-                    .insert(Transform::from_translation(sensor_translation))
-                    .insert(GlobalTransform::default())
-                    .insert(GroundSensor {
-                        ground_detection_entity: entity,
-                        intersecting_ground_entities: HashSet::new(),
-                    });
-            });
-        }
-    }
-}
+        for (level_transform, level_iid) in &level_query {
+            let ldtk_project = ldtk_project_assets
+                .get(ldtk_projects.single())
+                .expect("Project should be loaded if level has spawned");
 
-pub fn update_on_ground(
-    mut ground_detectors: Query<&mut GroundDetection>,
-    ground_sensors: Query<&GroundSensor, Changed<GroundSensor>>,
-) {
-    for sensor in &ground_sensors {
-        if let Ok(mut ground_detection) = ground_detectors.get_mut(sensor.ground_detection_entity) {
-            ground_detection.on_ground = !sensor.intersecting_ground_entities.is_empty();
-        }
-    }
-}
+            let level = ldtk_project
+                .get_raw_level_by_iid(&level_iid.to_string())
+                .expect("Spawned level should exist in LDtk project");
 
-pub fn ground_detection(
-    mut ground_sensors: Query<&mut GroundSensor>,
-    mut collisions: EventReader<CollisionEvent>,
-    collidables: Query<Entity, (With<Collider>, Without<Sensor>)>,
-) {
-    for collision_event in collisions.read() {
-        match collision_event {
-            CollisionEvent::Started(e1, e2, _) => {
-                if collidables.contains(*e1) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(*e2) {
-                        sensor.intersecting_ground_entities.insert(*e1);
-                    }
-                } else if collidables.contains(*e2) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(*e1) {
-                        sensor.intersecting_ground_entities.insert(*e2);
-                    }
+            if level_selection.is_match(&LevelIndices::default(), level) {
+                let level_ratio = level.px_wid as f32 / level.px_hei as f32;
+                orthographic_projection.viewport_origin = Vec2::ZERO;
+                if level_ratio > aspect_ratio {
+                    // level is wider than the screen
+                    let height = (level.px_hei as f32 / 9.).round() * 9.;
+                    let width = height * aspect_ratio;
+                    orthographic_projection.scaling_mode =
+                        bevy::render::camera::ScalingMode::Fixed { width, height };
+                    camera_transform.translation.x =
+                        (player_translation.x - level_transform.translation.x - width / 2.)
+                            .clamp(0., level.px_wid as f32 - width);
+                    camera_transform.translation.y = 0.;
+                } else {
+                    // level is taller than the screen
+                    let width = (level.px_wid as f32 / 16.).round() * 16.;
+                    let height = width / aspect_ratio;
+                    orthographic_projection.scaling_mode =
+                        bevy::render::camera::ScalingMode::Fixed { width, height };
+                    camera_transform.translation.y =
+                        (player_translation.y - level_transform.translation.y - height / 2.)
+                            .clamp(0., level.px_hei as f32 - height);
+                    camera_transform.translation.x = 0.;
                 }
-            }
-            CollisionEvent::Stopped(e1, e2, _) => {
-                if collidables.contains(*e1) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(*e2) {
-                        sensor.intersecting_ground_entities.remove(e1);
-                    }
-                } else if collidables.contains(*e2) {
-                    if let Ok(mut sensor) = ground_sensors.get_mut(*e1) {
-                        sensor.intersecting_ground_entities.remove(e2);
-                    }
-                }
+
+                camera_transform.translation.x += level_transform.translation.x;
+                camera_transform.translation.y += level_transform.translation.y;
             }
         }
     }
 }
 
-pub fn detect_climb_range(
-    mut climbers: Query<&mut Climber>,
-    climbables: Query<Entity, With<Climbable>>,
-    mut collisions: EventReader<CollisionEvent>,
+pub fn update_level_selection(
+    level_query: Query<(&LevelIid, &Transform), Without<Player>>,
+    player_query: Query<&Transform, With<Player>>,
+    mut level_selection: ResMut<LevelSelection>,
+    ldtk_projects: Query<&Handle<LdtkProject>>,
+    ldtk_project_assets: Res<Assets<LdtkProject>>,
 ) {
-    for collision in collisions.read() {
-        match collision {
-            CollisionEvent::Started(collider_a, collider_b, _) => {
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_a), climbables.get(*collider_b))
-                {
-                    climber.intersecting_climbables.insert(climbable);
-                }
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_b), climbables.get(*collider_a))
-                {
-                    climber.intersecting_climbables.insert(climbable);
-                };
-            }
-            CollisionEvent::Stopped(collider_a, collider_b, _) => {
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_a), climbables.get(*collider_b))
-                {
-                    climber.intersecting_climbables.remove(&climbable);
-                }
+    for (level_iid, level_transform) in &level_query {
+        let ldtk_project = ldtk_project_assets
+            .get(ldtk_projects.single())
+            .expect("Project should be loaded if level has spawned");
 
-                if let (Ok(mut climber), Ok(climbable)) =
-                    (climbers.get_mut(*collider_b), climbables.get(*collider_a))
-                {
-                    climber.intersecting_climbables.remove(&climbable);
-                }
-            }
-        }
-    }
-}
+        let level = ldtk_project
+            .get_raw_level_by_iid(&level_iid.to_string())
+            .expect("Spawned level should exist in LDtk project");
 
-pub fn ignore_gravity_if_climbing(
-    mut query: Query<(&Climber, &mut GravityScale), Changed<Climber>>,
-) {
-    for (climber, mut gravity_scale) in &mut query {
-        if climber.climbing {
-            gravity_scale.0 = 0.0;
-        } else {
-            gravity_scale.0 = 1.0;
+        let level_bounds = Rect {
+            min: Vec2::new(level_transform.translation.x, level_transform.translation.y),
+            max: Vec2::new(
+                level_transform.translation.x + level.px_wid as f32,
+                level_transform.translation.y + level.px_hei as f32,
+            ),
+        };
+        for player_transform in &player_query {
+            if player_transform.translation.x < level_bounds.max.x
+                && player_transform.translation.x > level_bounds.min.x
+                && player_transform.translation.y < level_bounds.max.y
+                && player_transform.translation.y > level_bounds.min.y
+            {
+                *level_selection = LevelSelection::iid(level.iid.clone());
+            }
         }
     }
 }
