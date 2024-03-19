@@ -9,11 +9,10 @@ body, html {
 
 #game {
     image-rendering: optimizeSpeed;             /* Older versions of FF */
-    image-rendering: -moz-crisp-edges;          /* FF 6.0+ */
-    image-rendering: -webkit-optimize-contrast; /* Safari */
-    image-rendering: -o-crisp-edges;            /* OS X & Windows Opera (12.02+) */
-    image-rendering: optimize-contrast;         /* Possible future browsers. */
-    -ms-interpolation-mode: nearest-neighbor;   /* IE */
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
     width: 100% !important;
     height: 100% !important;
     max-width: 100% !important;

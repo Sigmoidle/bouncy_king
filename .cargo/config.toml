@@ -24,23 +24,7 @@ rustflags = [
 rustflags = [
     "-Clink-arg=-fuse-ld=/opt/homebrew/opt/llvm/bin/ld64.lld", # Use LLD Linker
     "-Zshare-generics=y",                                      # (Nightly) Make the current crate share its generic instantiations
-    "-Zthreads=8",                                             # (Nightly) Use improved multithreading with the recommended amount of threads.
-]
-
-# [target.aarch64-apple-darwin]
-# rustflags = [
-#     "-C",
-#     "link-arg=-fuse-ld=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld",
-#     "-C",
-#     "link-arg=-ld_new",
-#     "-Zshare-generics=y",                                                                                          # (Nightly) Make the current crate share its generic instantiations
-#     "-Zthreads=8",                                                                                                 # (Nightly) Use improved multithreading with the recommended amount of threads.
-# ]
-
-[target.wasm32-unknown-unknown]
-rustflags = [
-    "-Zshare-generics=y", # (Nightly) Make the current crate share its generic instantiations
-    "-Zthreads=8",        # (Nightly) Use improved multithreading with the recommended amount of threads.
+    "-Zthreads=0",                                             # (Nightly) Use improved multithreading with the recommended amount of threads.
 ]
 
 [target.x86_64-pc-windows-msvc]

@@ -1,6 +1,6 @@
 use crate::components::{
-    AnimationState, Climbable, Climber, GameTouches, GroundDetection, GroundSensor, Player,
-    PlayerAnimations, Wall,
+    AccelerationStat, AnimationState, Climbable, Climber, FakeFrictionStat, GameTouches,
+    GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Player, PlayerAnimations, Wall,
 };
 use benimator::FrameRate;
 use bevy::prelude::*;
@@ -32,7 +32,7 @@ pub fn touch_input(
         .collect::<Vec<Vec2>>();
 }
 
-pub fn setup_player_animations(mut cmd: Commands, query: Query<Entity, Added<Player>>) {
+pub fn setup_player_components(mut cmd: Commands, query: Query<Entity, Added<Player>>) {
     let o = 22; // animation index offset in the sprite sheet
     let player_animations = PlayerAnimations {
         idle: benimator::Animation::from_indices((o + 12)..=(o + 13), FrameRate::from_fps(1.5)),
@@ -55,7 +55,11 @@ pub fn setup_player_animations(mut cmd: Commands, query: Query<Entity, Added<Pla
         if let Some(mut entity_command) = cmd.get_entity(entity) {
             entity_command
                 .insert(player_animations)
-                .insert(ActiveCollisionTypes::all());
+                .insert(ActiveCollisionTypes::all())
+                .insert(AccelerationStat(15.0))
+                .insert(MaxSpeedStat(Vec2 { x: 150.0, y: 400.0 }))
+                .insert(JumpForceStat(400.0))
+                .insert(FakeFrictionStat(-0.1));
         }
     }
 }
@@ -113,12 +117,14 @@ pub fn update_player_animations(
     }
 }
 
-// Stuff I haven't really programmed goes here:
-
 pub fn movement(
     input: Res<ButtonInput<KeyCode>>,
     mut query: Query<
         (
+            &AccelerationStat,
+            &MaxSpeedStat,
+            &JumpForceStat,
+            &FakeFrictionStat,
             &mut Transform,
             &mut Velocity,
             &mut Climber,
@@ -127,12 +133,30 @@ pub fn movement(
         With<Player>,
     >,
 ) {
-    for (mut transform, mut velocity, mut climber, ground_detection) in &mut query {
+    for (
+        acceleration_stat,
+        max_speed_stat,
+        jump_force_stat,
+        fake_friction_stat,
+        mut transform,
+        mut velocity,
+        mut climber,
+        ground_detection,
+    ) in &mut query
+    {
         let right = if input.pressed(KeyCode::KeyD) { 1. } else { 0. };
         let left = if input.pressed(KeyCode::KeyA) { 1. } else { 0. };
 
-        velocity.linvel.x += (right - left) * 15.0 + 0.5 * ((right - left) * 15.0);
-        velocity.linvel.x = velocity.linvel.x.clamp(-150.0, 150.0);
+        velocity.linvel.x +=
+            (right - left) * acceleration_stat.0 + 0.5 * ((right - left) * acceleration_stat.0);
+        velocity.linvel.x = velocity
+            .linvel
+            .x
+            .clamp(-max_speed_stat.0.x, max_speed_stat.0.x);
+
+        if ground_detection.on_ground || climber.climbing {
+            velocity.linvel.x += velocity.linvel.x * fake_friction_stat.0;
+        }
 
         if climber.intersecting_climbables.is_empty() {
             climber.climbing = false;
@@ -143,9 +167,9 @@ pub fn movement(
                 .intersecting_climbables
                 .iter()
                 .next()
-                .map(|a| a.1.translation.x + 2.5 * a.1.scale.x);
+                .map(|a| a.1.translation().x + 0.4 * a.1.compute_transform().scale.x);
             if let Some(x) = climb_x_location {
-                transform.translation.x = x + 5.0 * transform.scale.x;
+                transform.translation.x = x + 0.4 * transform.scale.x;
             }
         }
 
@@ -157,10 +181,13 @@ pub fn movement(
         }
 
         if input.just_pressed(KeyCode::Space) && (ground_detection.on_ground || climber.climbing) {
-            velocity.linvel.y = 400.;
+            velocity.linvel.y = jump_force_stat.0;
             climber.climbing = false;
         }
-        velocity.linvel.y = velocity.linvel.y.clamp(-400., 400.);
+        velocity.linvel.y = velocity
+            .linvel
+            .y
+            .clamp(-max_speed_stat.0.y, max_speed_stat.0.y);
     }
 }
 
@@ -217,6 +244,8 @@ pub fn spawn_ground_sensor(
     }
 }
 
+// Stuff I haven't really programmed goes here:
+
 pub fn update_on_ground(
     mut ground_detectors: Query<&mut GroundDetection>,
     ground_sensors: Query<&GroundSensor, Changed<GroundSensor>>,
@@ -263,7 +292,7 @@ pub fn ground_detection(
 
 pub fn detect_climb_range(
     mut climbers: Query<&mut Climber>,
-    climbables: Query<(Entity, &Transform), With<Climbable>>,
+    climbables: Query<(Entity, &GlobalTransform), With<Climbable>>,
     mut collisions: EventReader<CollisionEvent>,
 ) {
     for collision in collisions.read() {
@@ -471,7 +500,6 @@ pub fn spawn_wall_collision(
                                     / 2.,
                             ))
                             .insert(RigidBody::Fixed)
-                            .insert(Friction::new(0.3))
                             .insert(Transform::from_xyz(
                                 (wall_rect.left + wall_rect.right + 1) as f32 * grid_size as f32
                                     / 2.,

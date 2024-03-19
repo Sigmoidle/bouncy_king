@@ -22,7 +22,9 @@ impl From<IntGridCell> for SensorBundle {
         let rotation_constraints = LockedAxes::ROTATION_LOCKED;
 
         // ladder
-        if int_grid_cell.value == CollideEnums::Ladder as i32 {
+        if int_grid_cell.value == CollideEnums::Ladder as i32
+            || int_grid_cell.value == CollideEnums::Water as i32
+        {
             SensorBundle {
                 collider: Collider::cuboid(8., 8.),
                 sensor: Sensor,
@@ -57,6 +59,10 @@ impl From<&EntityInstance> for ColliderBundle {
                 rigid_body: RigidBody::Dynamic,
                 rotation_constraints,
                 active_events: ActiveEvents::COLLISION_EVENTS,
+                friction: Friction {
+                    coefficient: 0.0,
+                    combine_rule: CoefficientCombineRule::Min,
+                },
                 ..Default::default()
             },
             "Snake" => ColliderBundle {
@@ -81,6 +87,13 @@ pub struct LadderBundle {
     #[from_int_grid_cell]
     pub sensor_bundle: SensorBundle,
     pub climbable: Climbable,
+}
+
+#[derive(Clone, Default, Bundle, LdtkIntCell)]
+pub struct WaterBundle {
+    #[from_int_grid_cell]
+    pub sensor_bundle: SensorBundle,
+    pub water: Water,
 }
 
 #[derive(Default, Bundle, LdtkEntity)]
@@ -116,6 +129,9 @@ pub struct SnakeBundle {
 
 // Components
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
+pub struct Water;
+
 // Create the animation component
 // Note: you may make the animation an asset instead of a component
 #[derive(Component)]
@@ -133,7 +149,6 @@ pub struct PlayerAnimations {
     pub climb: benimator::Animation,
 }
 
-// Create the player component
 #[derive(Default, Component, Deref, DerefMut)]
 pub struct AnimationState(pub benimator::State);
 
@@ -158,7 +173,7 @@ pub struct Player;
 #[derive(Clone, PartialEq, Debug, Default, Component)]
 pub struct Climber {
     pub climbing: bool,
-    pub intersecting_climbables: HashMap<Entity, Transform>,
+    pub intersecting_climbables: HashMap<Entity, GlobalTransform>,
 }
 
 #[derive(Clone, Component, Debug, Eq, Default, PartialEq)]
@@ -180,3 +195,15 @@ impl From<&EntityInstance> for Items {
 pub struct GroundDetection {
     pub on_ground: bool,
 }
+
+#[derive(Clone, Default, Component)]
+pub struct AccelerationStat(pub f32);
+
+#[derive(Clone, Default, Component)]
+pub struct MaxSpeedStat(pub Vec2);
+
+#[derive(Clone, Default, Component)]
+pub struct JumpForceStat(pub f32);
+
+#[derive(Clone, Default, Component)]
+pub struct FakeFrictionStat(pub f32);
