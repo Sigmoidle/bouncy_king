@@ -22,9 +22,16 @@ impl From<IntGridCell> for SensorBundle {
         let rotation_constraints = LockedAxes::ROTATION_LOCKED;
 
         // ladder
-        if int_grid_cell.value == CollideEnums::Ladder as i32
-            || int_grid_cell.value == CollideEnums::Water as i32
-        {
+        if int_grid_cell.value == CollideEnums::Ladder as i32 {
+            SensorBundle {
+                collider: Collider::cuboid(5., 8.),
+                sensor: Sensor,
+                rotation_constraints,
+                active_events: ActiveEvents::COLLISION_EVENTS,
+            }
+        }
+        // Water
+        else if int_grid_cell.value == CollideEnums::Water as i32 {
             SensorBundle {
                 collider: Collider::cuboid(8., 8.),
                 sensor: Sensor,

@@ -117,51 +117,59 @@ pub fn update_player_animations(
     }
 }
 
-pub fn movement(
+pub fn player_movement(
     input: Res<ButtonInput<KeyCode>>,
     mut query: Query<
         (
             &AccelerationStat,
-            &MaxSpeedStat,
             &JumpForceStat,
-            &FakeFrictionStat,
-            &mut Transform,
             &mut Velocity,
-            &mut Climber,
+            &Climber,
             &GroundDetection,
         ),
         With<Player>,
     >,
 ) {
-    for (
-        acceleration_stat,
-        max_speed_stat,
-        jump_force_stat,
-        fake_friction_stat,
-        mut transform,
-        mut velocity,
-        mut climber,
-        ground_detection,
-    ) in &mut query
+    for (acceleration_stat, jump_force_stat, mut velocity, climber, ground_detection) in &mut query
     {
         let right = if input.pressed(KeyCode::KeyD) { 1. } else { 0. };
         let left = if input.pressed(KeyCode::KeyA) { 1. } else { 0. };
 
         velocity.linvel.x +=
             (right - left) * acceleration_stat.0 + 0.5 * ((right - left) * acceleration_stat.0);
-        velocity.linvel.x = velocity
-            .linvel
-            .x
-            .clamp(-max_speed_stat.0.x, max_speed_stat.0.x);
 
-        if ground_detection.on_ground || climber.climbing {
-            velocity.linvel.x += velocity.linvel.x * fake_friction_stat.0;
+        if climber.climbing {
+            let up = if input.pressed(KeyCode::KeyW) { 1. } else { 0. };
+            let down = if input.pressed(KeyCode::KeyS) { 1. } else { 0. };
+            velocity.linvel.y = (up - down) * 150.;
         }
 
+        if input.just_pressed(KeyCode::Space) && (ground_detection.on_ground || climber.climbing) {
+            velocity.linvel.y = jump_force_stat.0;
+        }
+    }
+}
+
+pub fn update_climbing_status(
+    input: Res<ButtonInput<KeyCode>>,
+    mut query: Query<&mut Climber, With<Player>>,
+) {
+    for mut climber in &mut query {
         if climber.intersecting_climbables.is_empty() {
             climber.climbing = false;
         } else if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::KeyS) {
             climber.climbing = true;
+        } else if input.pressed(KeyCode::Space) {
+            climber.climbing = false;
+        }
+    }
+}
+
+pub fn snap_player_to_climbable(
+    mut query: Query<(&mut Transform, &mut Velocity, &Climber), With<Player>>,
+) {
+    for (mut transform, mut velocity, climber) in &mut query {
+        if climber.climbing && velocity.linvel.y != 0.0 {
             velocity.linvel.x = 0.0;
             let climb_x_location = climber
                 .intersecting_climbables
@@ -172,22 +180,33 @@ pub fn movement(
                 transform.translation.x = x + 0.4 * transform.scale.x;
             }
         }
+    }
+}
 
+pub fn apply_fake_friction_while_climbing(
+    mut query: Query<(&FakeFrictionStat, &mut Velocity, &Climber)>,
+) {
+    for (fake_friction, mut velocity, climber) in &mut query {
         if climber.climbing {
-            let up = if input.pressed(KeyCode::KeyW) { 1. } else { 0. };
-            let down = if input.pressed(KeyCode::KeyS) { 1. } else { 0. };
-
-            velocity.linvel.y = (up - down) * 150.;
+            velocity.linvel.x += velocity.linvel.x * fake_friction.0;
         }
+    }
+}
 
-        if input.just_pressed(KeyCode::Space) && (ground_detection.on_ground || climber.climbing) {
-            velocity.linvel.y = jump_force_stat.0;
-            climber.climbing = false;
+pub fn apply_fake_friction_on_ground(
+    mut query: Query<(&FakeFrictionStat, &mut Velocity, &GroundDetection)>,
+) {
+    for (fake_friction, mut velocity, ground_detection) in &mut query {
+        if ground_detection.on_ground {
+            velocity.linvel.x += velocity.linvel.x * fake_friction.0;
         }
-        velocity.linvel.y = velocity
-            .linvel
-            .y
-            .clamp(-max_speed_stat.0.y, max_speed_stat.0.y);
+    }
+}
+
+pub fn clamp_velocity(mut query: Query<(&MaxSpeedStat, &mut Velocity)>) {
+    for (max_speed, mut velocity) in &mut query {
+        velocity.linvel.x = velocity.linvel.x.clamp(-max_speed.0.x, max_speed.0.x);
+        velocity.linvel.y = velocity.linvel.y.clamp(-max_speed.0.y, max_speed.0.y);
     }
 }
 
@@ -243,8 +262,6 @@ pub fn spawn_ground_sensor(
         }
     }
 }
-
-// Stuff I haven't really programmed goes here:
 
 pub fn update_on_ground(
     mut ground_detectors: Query<&mut GroundDetection>,
