@@ -82,6 +82,7 @@ fn main() {
                 systems::apply_fake_friction_on_ground,
                 systems::snap_player_to_climbable,
                 systems::update_climbing_status,
+                systems::check_touched_water,
             ),
         )
         // # Plugins

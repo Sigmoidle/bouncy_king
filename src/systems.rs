@@ -1,6 +1,7 @@
 use crate::components::{
     AccelerationStat, AnimationState, Climbable, Climber, FakeGroundFrictionStat, GameTouches,
     GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Player, PlayerAnimations, Wall,
+    Water,
 };
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
@@ -314,6 +315,38 @@ pub fn update_climb_intersection_detection(
     }
 }
 
+pub fn check_touched_water(
+    mut player: Query<&mut Transform, With<Player>>,
+    waters: Query<(Entity, &GlobalTransform), With<Water>>,
+    mut collisions: EventReader<CollisionEvent>,
+) {
+    for collision in collisions.read() {
+        match collision {
+            CollisionEvent::Started(collider_a, collider_b, _) => {
+                if let (Ok(mut player), Ok(_)) =
+                    (player.get_mut(*collider_a), waters.get(*collider_b))
+                {
+                    player.translation = Vec3 {
+                        x: 200.0,
+                        y: -170.0,
+                        z: 10.0,
+                    };
+                }
+                if let (Ok(mut player), Ok(_)) =
+                    (player.get_mut(*collider_b), waters.get(*collider_a))
+                {
+                    player.translation = Vec3 {
+                        x: 200.0,
+                        y: -170.0,
+                        z: 10.0,
+                    };
+                }
+            }
+            CollisionEvent::Stopped(collider_a, collider_b, _) => {}
+        }
+    }
+}
+
 pub fn ignore_gravity_if_climbing(
     mut query: Query<(&Climber, &mut GravityScale), Changed<Climber>>,
 ) {
@@ -354,6 +387,7 @@ pub fn spawn_wall_collision(
     level_query: Query<(Entity, &LevelIid)>,
     ldtk_projects: Query<&Handle<LdtkProject>>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
+    level_assets: Res<Assets<LdtkExternalLevel>>,
 ) {
     /// Represents a wide wall that is 1 tile tall
     /// Used to spawn wall collisions
@@ -400,8 +434,8 @@ pub fn spawn_wall_collision(
                     .expect("Project should be loaded if level has spawned");
 
                 let level = ldtk_project
-                    .as_standalone()
-                    .get_loaded_level_by_iid(&level_iid.to_string())
+                    .as_parent()
+                    .get_external_level_by_iid(&level_assets, &level_iid.to_string())
                     .expect("Spawned level should exist in LDtk project");
 
                 let LayerInstance {
