@@ -11,6 +11,7 @@ use bevy_rapier2d::prelude::*;
 mod components;
 mod constants;
 mod debug;
+mod ldtk_spawning;
 mod systems;
 
 fn main() {
@@ -23,7 +24,7 @@ fn main() {
         .insert_resource(Msaa::Off)
         // - Physics engine settings
         .insert_resource(RapierConfiguration {
-            gravity: Vec2::new(0.0, -2000.0),
+            gravity: Vec2::new(0.0, constants::GRAVITY),
             ..Default::default()
         })
         // - LDTK settings
@@ -42,47 +43,36 @@ fn main() {
         // - Register "collide" int grids
         .register_ldtk_int_cell_for_layer::<components::WallBundle>(
             "Collide",
-            CollideEnums::RedBrick as i32,
+            constants::CollideEnums::RedBrick as i32,
         )
         .register_ldtk_int_cell_for_layer::<components::WallBundle>(
             "Collide",
-            CollideEnums::BlueBrick as i32,
+            constants::CollideEnums::BlueBrick as i32,
         )
         .register_ldtk_int_cell_for_layer::<components::LadderBundle>(
             "Collide",
-            CollideEnums::Ladder as i32,
+            constants::CollideEnums::Ladder as i32,
         )
         .register_ldtk_int_cell_for_layer::<components::WaterBundle>(
             "Collide",
-            CollideEnums::Water as i32,
+            constants::CollideEnums::Water as i32,
         )
         // # Systems
         // - Startup systems
-        .add_systems(
-            Startup,
-            (
-                systems::setup.after(systems::setup_camera),
-                systems::setup_camera,
-            ),
-        )
+        .add_systems(Startup, (systems::setup, systems::setup_camera))
         // - Delayed startup systems (Due to the way LDTK loads stuff in)
-        .add_systems(
-            Update,
-            (
-                systems::spawn_ground_sensor,
-                systems::setup_player_components,
-            ),
-        )
+        .add_systems(Update, ldtk_spawning::setup_player_components)
         // - Update systems
         .add_systems(
             Update,
             (
+                systems::spawn_ground_sensor,
                 systems::touch_input,
                 systems::spawn_wall_collision,
                 systems::player_movement,
                 systems::update_on_ground,
-                systems::ground_detection,
-                systems::detect_climb_range,
+                systems::update_ground_sensor_intersections,
+                systems::update_climb_intersection_detection,
                 systems::ignore_gravity_if_climbing,
                 systems::update_player_animations,
                 systems::update_level_selection,
@@ -101,7 +91,10 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         present_mode: bevy::window::PresentMode::AutoNoVsync,
-                        resolution: WindowResolution::new(BASE_RES.x, BASE_RES.y),
+                        resolution: WindowResolution::new(
+                            constants::BASE_RES.x,
+                            constants::BASE_RES.y,
+                        ),
                         canvas: Some("#game".to_string()),
                         ..default()
                     }),
@@ -111,20 +104,8 @@ fn main() {
             // - LDTK
             LdtkPlugin,
             // - Physics engine
-            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(constants::PIXELS_PER_METER),
             debug::add_plugin,
         ))
         .run();
-}
-
-const BASE_RES: Vec2 = Vec2 {
-    x: 1280.0,
-    y: 720.0,
-};
-
-enum CollideEnums {
-    RedBrick = 1,
-    BlueBrick,
-    Water,
-    Ladder,
 }

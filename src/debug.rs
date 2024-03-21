@@ -2,6 +2,7 @@ use bevy::diagnostic::DiagnosticsStore;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy_rapier2d::render::DebugRenderContext;
+use bevy_rapier2d::render::DebugRenderMode;
 use bevy_rapier2d::render::DebugRenderStyle;
 use bevy_rapier2d::render::RapierDebugRenderPlugin;
 
@@ -13,7 +14,7 @@ pub fn add_plugin(app: &mut App) {
             RapierDebugRenderPlugin {
                 enabled: false,
                 style: DebugRenderStyle { ..default() },
-                ..default()
+                mode: DebugRenderMode::all(),
             },
         ));
 }

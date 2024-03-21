@@ -1,8 +1,7 @@
 use crate::components::{
-    AccelerationStat, AnimationState, Climbable, Climber, FakeFrictionStat, GameTouches,
+    AccelerationStat, AnimationState, Climbable, Climber, FakeGroundFrictionStat, GameTouches,
     GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Player, PlayerAnimations, Wall,
 };
-use benimator::FrameRate;
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -30,38 +29,6 @@ pub fn touch_input(
         .iter()
         .filter_map(|t| camera.viewport_to_world_2d(camera_transform, t.position()))
         .collect::<Vec<Vec2>>();
-}
-
-pub fn setup_player_components(mut cmd: Commands, query: Query<Entity, Added<Player>>) {
-    let o = 22; // animation index offset in the sprite sheet
-    let player_animations = PlayerAnimations {
-        idle: benimator::Animation::from_indices((o + 12)..=(o + 13), FrameRate::from_fps(1.5)),
-        walk: benimator::Animation::from_indices((o + 1)..=(o + 4), FrameRate::from_fps(12.0)),
-        jump_prep: benimator::Animation::from_indices((o + 5)..=(o + 5), FrameRate::from_fps(12.0)),
-        jump_up: benimator::Animation::from_indices((o + 6)..=(o + 6), FrameRate::from_fps(12.0)),
-        jump_down: benimator::Animation::from_indices((o + 7)..=(o + 7), FrameRate::from_fps(12.0)),
-        jump_land: benimator::Animation::from_indices((o + 8)..=(o + 8), FrameRate::from_fps(12.0)),
-        hit: benimator::Animation::from_indices((o + 9)..(o + 10), FrameRate::from_fps(12.0)),
-        slash: benimator::Animation::from_indices(
-            [(o + 12), (o + 11), (o + 12), (o + 13)],
-            FrameRate::from_fps(12.0),
-        ),
-        punch: benimator::Animation::from_indices([(o + 14), (o + 12)], FrameRate::from_fps(12.0)),
-        run: benimator::Animation::from_indices((o + 15)..=(o + 18), FrameRate::from_fps(12.0)),
-        climb: benimator::Animation::from_indices((o + 19)..=(o + 22), FrameRate::from_fps(12.0)),
-    };
-
-    if let Ok(entity) = query.get_single() {
-        if let Some(mut entity_command) = cmd.get_entity(entity) {
-            entity_command
-                .insert(player_animations)
-                .insert(ActiveCollisionTypes::all())
-                .insert(AccelerationStat(15.0))
-                .insert(MaxSpeedStat(Vec2 { x: 150.0, y: 400.0 }))
-                .insert(JumpForceStat(400.0))
-                .insert(FakeFrictionStat(-0.1));
-        }
-    }
 }
 
 pub fn update_player_animations(
@@ -184,7 +151,7 @@ pub fn snap_player_to_climbable(
 }
 
 pub fn apply_fake_friction_while_climbing(
-    mut query: Query<(&FakeFrictionStat, &mut Velocity, &Climber)>,
+    mut query: Query<(&FakeGroundFrictionStat, &mut Velocity, &Climber)>,
 ) {
     for (fake_friction, mut velocity, climber) in &mut query {
         if climber.climbing {
@@ -194,7 +161,7 @@ pub fn apply_fake_friction_while_climbing(
 }
 
 pub fn apply_fake_friction_on_ground(
-    mut query: Query<(&FakeFrictionStat, &mut Velocity, &GroundDetection)>,
+    mut query: Query<(&FakeGroundFrictionStat, &mut Velocity, &GroundDetection)>,
 ) {
     for (fake_friction, mut velocity, ground_detection) in &mut query {
         if ground_detection.on_ground {
@@ -274,7 +241,7 @@ pub fn update_on_ground(
     }
 }
 
-pub fn ground_detection(
+pub fn update_ground_sensor_intersections(
     mut ground_sensors: Query<&mut GroundSensor>,
     mut collisions: EventReader<CollisionEvent>,
     collidables: Query<Entity, (With<Collider>, Without<Sensor>)>,
@@ -307,7 +274,7 @@ pub fn ground_detection(
     }
 }
 
-pub fn detect_climb_range(
+pub fn update_climb_intersection_detection(
     mut climbers: Query<&mut Climber>,
     climbables: Query<(Entity, &GlobalTransform), With<Climbable>>,
     mut collisions: EventReader<CollisionEvent>,

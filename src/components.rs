@@ -5,8 +5,6 @@ use std::collections::{HashMap, HashSet};
 
 use bevy_rapier2d::prelude::*;
 
-use crate::CollideEnums;
-
 // Bundles:
 
 #[derive(Clone, Default, Bundle, LdtkIntCell)]
@@ -15,33 +13,6 @@ pub struct SensorBundle {
     pub sensor: Sensor,
     pub active_events: ActiveEvents,
     pub rotation_constraints: LockedAxes,
-}
-
-impl From<IntGridCell> for SensorBundle {
-    fn from(int_grid_cell: IntGridCell) -> SensorBundle {
-        let rotation_constraints = LockedAxes::ROTATION_LOCKED;
-
-        // ladder
-        if int_grid_cell.value == CollideEnums::Ladder as i32 {
-            SensorBundle {
-                collider: Collider::cuboid(5., 8.),
-                sensor: Sensor,
-                rotation_constraints,
-                active_events: ActiveEvents::COLLISION_EVENTS,
-            }
-        }
-        // Water
-        else if int_grid_cell.value == CollideEnums::Water as i32 {
-            SensorBundle {
-                collider: Collider::cuboid(8., 8.),
-                sensor: Sensor,
-                rotation_constraints,
-                active_events: ActiveEvents::COLLISION_EVENTS,
-            }
-        } else {
-            SensorBundle::default()
-        }
-    }
 }
 
 #[derive(Clone, Default, Bundle, LdtkIntCell)]
@@ -54,34 +25,6 @@ pub struct ColliderBundle {
     pub friction: Friction,
     pub density: ColliderMassProperties,
     pub active_events: ActiveEvents,
-}
-
-impl From<&EntityInstance> for ColliderBundle {
-    fn from(entity_instance: &EntityInstance) -> ColliderBundle {
-        let rotation_constraints = LockedAxes::ROTATION_LOCKED;
-
-        match entity_instance.identifier.as_ref() {
-            "Player" => ColliderBundle {
-                collider: Collider::capsule_y(7., 7.),
-                rigid_body: RigidBody::Dynamic,
-                rotation_constraints,
-                active_events: ActiveEvents::COLLISION_EVENTS,
-                friction: Friction {
-                    coefficient: 0.0,
-                    combine_rule: CoefficientCombineRule::Min,
-                },
-                ..Default::default()
-            },
-            "Snake" => ColliderBundle {
-                collider: Collider::cuboid(5., 5.),
-                rigid_body: RigidBody::KinematicVelocityBased,
-                rotation_constraints,
-                active_events: ActiveEvents::COLLISION_EVENTS,
-                ..Default::default()
-            },
-            _ => ColliderBundle::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, Bundle, LdtkIntCell)]
@@ -139,8 +82,6 @@ pub struct SnakeBundle {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct Water;
 
-// Create the animation component
-// Note: you may make the animation an asset instead of a component
 #[derive(Component)]
 pub struct PlayerAnimations {
     pub idle: benimator::Animation,
@@ -184,19 +125,7 @@ pub struct Climber {
 }
 
 #[derive(Clone, Component, Debug, Eq, Default, PartialEq)]
-pub struct Items(Vec<String>);
-
-impl From<&EntityInstance> for Items {
-    fn from(entity_instance: &EntityInstance) -> Self {
-        Items(
-            entity_instance
-                .iter_enums_field("Items")
-                .expect("items field should be correctly typed")
-                .cloned()
-                .collect(),
-        )
-    }
-}
+pub struct Items(pub Vec<String>);
 
 #[derive(Clone, Default, Component)]
 pub struct GroundDetection {
@@ -213,4 +142,4 @@ pub struct MaxSpeedStat(pub Vec2);
 pub struct JumpForceStat(pub f32);
 
 #[derive(Clone, Default, Component)]
-pub struct FakeFrictionStat(pub f32);
+pub struct FakeGroundFrictionStat(pub f32);
