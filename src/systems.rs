@@ -3,6 +3,7 @@ use crate::components::{
     GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Player, PlayerAnimations, Wall,
     Water,
 };
+use crate::constants;
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -319,6 +320,7 @@ pub fn check_touched_water(
     mut player: Query<&mut Transform, With<Player>>,
     waters: Query<(Entity, &GlobalTransform), With<Water>>,
     mut collisions: EventReader<CollisionEvent>,
+    mut level_selection: ResMut<LevelSelection>,
 ) {
     for collision in collisions.read() {
         match collision {
@@ -326,20 +328,14 @@ pub fn check_touched_water(
                 if let (Ok(mut player), Ok(_)) =
                     (player.get_mut(*collider_a), waters.get(*collider_b))
                 {
-                    player.translation = Vec3 {
-                        x: 200.0,
-                        y: -170.0,
-                        z: 10.0,
-                    };
+                    player.translation = constants::DEFAULT_SPAWN;
+                    *level_selection = LevelSelection::index(0);
                 }
                 if let (Ok(mut player), Ok(_)) =
                     (player.get_mut(*collider_b), waters.get(*collider_a))
                 {
-                    player.translation = Vec3 {
-                        x: 200.0,
-                        y: -170.0,
-                        z: 10.0,
-                    };
+                    player.translation = constants::DEFAULT_SPAWN;
+                    *level_selection = LevelSelection::index(0);
                 }
             }
             CollisionEvent::Stopped(collider_a, collider_b, _) => {}

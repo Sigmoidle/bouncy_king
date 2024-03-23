@@ -17,3 +17,11 @@ pub enum CollideEnums {
 // Physics engine stuff
 pub const GRAVITY: f32 = -2000.0;
 pub const PIXELS_PER_METER: f32 = 100.0;
+
+// Game stuff
+
+pub const DEFAULT_SPAWN: Vec3 = Vec3 {
+    x: 200.0,
+    y: -170.0,
+    z: 10.0,
+};
