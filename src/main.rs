@@ -39,7 +39,7 @@ fn main() {
         // # LDTK settings
         // - Register entities
         .register_ldtk_entity::<components::PlayerBundle>("Player")
-        .register_ldtk_entity::<components::SnakeBundle>("Snake")
+        .register_ldtk_entity::<components::MobBundle>("Snake")
         // - Register "collide" int grids
         .register_ldtk_int_cell_for_layer::<components::WallBundle>(
             "Collide",
@@ -83,6 +83,8 @@ fn main() {
                 systems::snap_player_to_climbable,
                 systems::update_climbing_status,
                 systems::check_touched_water,
+                systems::on_dead,
+                systems::patrol,
             ),
         )
         // # Plugins

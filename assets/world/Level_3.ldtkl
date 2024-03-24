@@ -51,7 +51,27 @@
 			"seed": 6960729,
 			"overrideTilesetUid": null,
 			"gridTiles": [],
-			"entityInstances": []
+			"entityInstances": [
+				{
+					"__identifier": "Snake",
+					"__grid": [4,11],
+					"__pivot": [0.5,0.5],
+					"__tags": [],
+					"__tile": { "tilesetUid": 1, "x": 0, "y": 96, "w": 32, "h": 32 },
+					"__smartColor": "#63C74D",
+					"iid": "086497c0-d7b0-11ee-bb58-637e0a27d635",
+					"width": 32,
+					"height": 32,
+					"defUid": 20,
+					"px": [77,182],
+					"fieldInstances": [{ "__identifier": "patrol", "__type": "Array<Point>", "__value": [{ "cx": 13, "cy": 11 }], "__tile": null, "defUid": 127, "realEditorValues": [{
+						"id": "V_String",
+						"params": ["13,11"]
+					}] }],
+					"__worldX": -435,
+					"__worldY": 182
+				}
+			]
 		},
 		{
 			"__identifier": "Collide",

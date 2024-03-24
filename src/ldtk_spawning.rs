@@ -1,11 +1,12 @@
 use crate::components::{
-    AccelerationStat, ColliderBundle, FakeGroundFrictionStat, Items, JumpForceStat, MaxSpeedStat,
-    Player, PlayerAnimations, SensorBundle,
+    AccelerationStat, CanDie, ColliderBundle, FakeGroundFrictionStat, Items, JumpForceStat,
+    MaxSpeedStat, Patrol, Player, PlayerAnimations, SensorBundle,
 };
 use crate::constants::CollideEnums;
 use benimator::FrameRate;
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
+use bevy_ecs_ldtk::utils::ldtk_pixel_coords_to_translation_pivoted;
 use bevy_rapier2d::prelude::*;
 
 // Spawn sensors for int-grid from LDTK
@@ -54,7 +55,7 @@ impl From<&EntityInstance> for ColliderBundle {
                 ..Default::default()
             },
             "Snake" => ColliderBundle {
-                collider: Collider::cuboid(5., 5.),
+                collider: Collider::cuboid(8., 6.),
                 rigid_body: RigidBody::KinematicVelocityBased,
                 rotation_constraints,
                 active_events: ActiveEvents::COLLISION_EVENTS,
@@ -75,6 +76,52 @@ impl From<&EntityInstance> for Items {
                 .cloned()
                 .collect(),
         )
+    }
+}
+
+impl LdtkEntity for Patrol {
+    fn bundle_entity(
+        entity_instance: &EntityInstance,
+        layer_instance: &LayerInstance,
+        _: Option<&Handle<Image>>,
+        _: Option<&TilesetDefinition>,
+        _: &AssetServer,
+        _: &mut Assets<TextureAtlasLayout>,
+    ) -> Patrol {
+        let mut points = Vec::new();
+        points.push(ldtk_pixel_coords_to_translation_pivoted(
+            entity_instance.px,
+            layer_instance.c_hei * layer_instance.grid_size,
+            IVec2::new(entity_instance.width, entity_instance.height),
+            entity_instance.pivot,
+        ));
+
+        let ldtk_patrol_points = entity_instance
+            .iter_points_field("patrol")
+            .expect("patrol field should be correclty typed");
+
+        for ldtk_point in ldtk_patrol_points {
+            // The +1 is necessary here due to the pivot of the entities in the sample
+            // file.
+            // The patrols set up in the file look flat and grounded,
+            // but technically they're not if you consider the pivot,
+            // which is at the bottom-center for the skulls.
+            let pixel_coords = (ldtk_point.as_vec2() + Vec2::new(0.5, 0.5))
+                * Vec2::splat(layer_instance.grid_size as f32);
+
+            points.push(ldtk_pixel_coords_to_translation_pivoted(
+                pixel_coords.as_ivec2(),
+                layer_instance.c_hei * layer_instance.grid_size,
+                IVec2::new(entity_instance.width, entity_instance.height),
+                entity_instance.pivot,
+            ));
+        }
+
+        Patrol {
+            points,
+            index: 1,
+            forward: true,
+        }
     }
 }
 
@@ -105,7 +152,11 @@ pub fn setup_player_components(mut cmd: Commands, query: Query<Entity, Added<Pla
                 .insert(AccelerationStat(15.0))
                 .insert(MaxSpeedStat(Vec2 { x: 150.0, y: 400.0 }))
                 .insert(JumpForceStat(400.0))
-                .insert(FakeGroundFrictionStat(-0.1));
+                .insert(FakeGroundFrictionStat(-0.1))
+                .insert(CanDie {
+                    is_dead: false,
+                    dead_animation_timer: Timer::from_seconds(1.5, TimerMode::Once),
+                });
         }
     }
 }

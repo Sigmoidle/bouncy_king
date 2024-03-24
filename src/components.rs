@@ -71,10 +71,15 @@ pub struct PlayerBundle {
     entity_instance: EntityInstance,
 }
 
-#[derive(Default, Bundle, LdtkEntity)]
-pub struct SnakeBundle {
+#[derive(Clone, Default, Bundle, LdtkEntity)]
+pub struct MobBundle {
     #[sprite_sheet_bundle]
-    sprite_sheet_bundle: SpriteSheetBundle,
+    pub sprite_sheet_bundle: SpriteSheetBundle,
+    #[from_entity_instance]
+    pub collider_bundle: ColliderBundle,
+    pub enemy: Enemy,
+    #[ldtk_entity]
+    pub patrol: Patrol,
 }
 
 // Components
@@ -143,3 +148,19 @@ pub struct JumpForceStat(pub f32);
 
 #[derive(Clone, Default, Component)]
 pub struct FakeGroundFrictionStat(pub f32);
+
+#[derive(Clone, Default, Component)]
+pub struct CanDie {
+    pub is_dead: bool,
+    pub dead_animation_timer: Timer,
+}
+
+#[derive(Clone, PartialEq, Debug, Default, Component)]
+pub struct Patrol {
+    pub points: Vec<Vec2>,
+    pub index: usize,
+    pub forward: bool,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
+pub struct Enemy;

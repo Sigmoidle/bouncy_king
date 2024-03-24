@@ -1,7 +1,7 @@
 use crate::components::{
-    AccelerationStat, AnimationState, Climbable, Climber, FakeGroundFrictionStat, GameTouches,
-    GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Player, PlayerAnimations, Wall,
-    Water,
+    AccelerationStat, AnimationState, CanDie, Climbable, Climber, FakeGroundFrictionStat,
+    GameTouches, GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Patrol, Player,
+    PlayerAnimations, Wall, Water,
 };
 use crate::constants;
 use bevy::prelude::*;
@@ -83,6 +83,19 @@ pub fn update_player_animations(
         }
 
         atlas.index = player.frame_index();
+    }
+}
+
+pub fn on_dead(
+    mut query: Query<(&mut CanDie, &mut Transform), With<Player>>,
+    mut level_selection: ResMut<LevelSelection>,
+) {
+    for (mut can_die, mut transform) in &mut query {
+        if can_die.is_dead {
+            transform.translation = constants::DEFAULT_SPAWN;
+            *level_selection = LevelSelection::index(0);
+            can_die.is_dead = false;
+        }
     }
 }
 
@@ -317,28 +330,20 @@ pub fn update_climb_intersection_detection(
 }
 
 pub fn check_touched_water(
-    mut player: Query<&mut Transform, With<Player>>,
+    mut player: Query<&mut CanDie, With<Player>>,
     waters: Query<(Entity, &GlobalTransform), With<Water>>,
     mut collisions: EventReader<CollisionEvent>,
-    mut level_selection: ResMut<LevelSelection>,
 ) {
     for collision in collisions.read() {
-        match collision {
-            CollisionEvent::Started(collider_a, collider_b, _) => {
-                if let (Ok(mut player), Ok(_)) =
-                    (player.get_mut(*collider_a), waters.get(*collider_b))
-                {
-                    player.translation = constants::DEFAULT_SPAWN;
-                    *level_selection = LevelSelection::index(0);
-                }
-                if let (Ok(mut player), Ok(_)) =
-                    (player.get_mut(*collider_b), waters.get(*collider_a))
-                {
-                    player.translation = constants::DEFAULT_SPAWN;
-                    *level_selection = LevelSelection::index(0);
-                }
+        if let CollisionEvent::Started(collider_a, collider_b, _) = collision {
+            if let (Ok(mut player), Ok(_)) = (player.get_mut(*collider_a), waters.get(*collider_b))
+            {
+                player.is_dead = true;
             }
-            CollisionEvent::Stopped(collider_a, collider_b, _) => {}
+            if let (Ok(mut player), Ok(_)) = (player.get_mut(*collider_b), waters.get(*collider_a))
+            {
+                player.is_dead = true;
+            }
         }
     }
 }
@@ -633,5 +638,38 @@ pub fn update_level_selection(
                 *level_selection = LevelSelection::iid(level.iid.clone());
             }
         }
+    }
+}
+
+pub fn patrol(mut query: Query<(&mut Transform, &mut Velocity, &mut Patrol)>) {
+    for (mut transform, mut velocity, mut patrol) in &mut query {
+        if patrol.points.len() <= 1 {
+            continue;
+        }
+
+        let mut new_velocity =
+            (patrol.points[patrol.index] - transform.translation.truncate()).normalize() * 15.;
+
+        if new_velocity.dot(velocity.linvel) < 0. {
+            if patrol.index == 0 {
+                patrol.forward = true;
+            } else if patrol.index == patrol.points.len() - 1 {
+                patrol.forward = false;
+            }
+
+            transform.translation.x = patrol.points[patrol.index].x;
+            transform.translation.y = patrol.points[patrol.index].y;
+
+            if patrol.forward {
+                patrol.index += 1;
+            } else {
+                patrol.index -= 1;
+            }
+
+            new_velocity =
+                (patrol.points[patrol.index] - transform.translation.truncate()).normalize() * 75.;
+        }
+
+        velocity.linvel = new_velocity;
     }
 }

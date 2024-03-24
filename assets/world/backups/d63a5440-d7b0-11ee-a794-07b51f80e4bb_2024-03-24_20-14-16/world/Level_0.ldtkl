@@ -54,8 +54,8 @@
 			"entityInstances": [
 				{
 					"__identifier": "Snake",
-					"__grid": [24,8],
-					"__pivot": [0.5,0.5],
+					"__grid": [23,7],
+					"__pivot": [0,0],
 					"__tags": [],
 					"__tile": { "tilesetUid": 1, "x": 0, "y": 96, "w": 32, "h": 32 },
 					"__smartColor": "#63C74D",
@@ -63,13 +63,13 @@
 					"width": 32,
 					"height": 32,
 					"defUid": 20,
-					"px": [392,136],
-					"fieldInstances": [{ "__identifier": "patrol", "__type": "Array<Point>", "__value": [{ "cx": 30, "cy": 8 }], "__tile": null, "defUid": 127, "realEditorValues": [{
+					"px": [376,120],
+					"fieldInstances": [{ "__identifier": "patrol", "__type": "Array<Point>", "__value": [{ "cx": 29, "cy": 8 }], "__tile": null, "defUid": 127, "realEditorValues": [{
 						"id": "V_String",
-						"params": ["30,8"]
+						"params": ["29,8"]
 					}] }],
-					"__worldX": 392,
-					"__worldY": 136
+					"__worldX": 376,
+					"__worldY": 120
 				},
 				{
 					"__identifier": "Player",

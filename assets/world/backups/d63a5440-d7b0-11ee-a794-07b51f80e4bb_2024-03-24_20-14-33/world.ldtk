@@ -1732,8 +1732,8 @@
 			"maxCount": 0,
 			"limitScope": "PerLevel",
 			"limitBehavior": "MoveLastOne",
-			"pivotX": 0.5,
-			"pivotY": 0.5,
+			"pivotX": 1,
+			"pivotY": 1,
 			"fieldDefs": [
 				{
 					"identifier": "patrol",
