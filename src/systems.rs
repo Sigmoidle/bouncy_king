@@ -1,7 +1,7 @@
 use crate::components::{
-    AccelerationStat, AnimationState, CanDie, Climbable, Climber, FakeGroundFrictionStat,
-    GameTouches, GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Patrol, Player,
-    PlayerAnimations, Wall, Water,
+    AccelerationStat, AnimationState, CanDie, Climbable, Climber, Enemy, FakeGroundFrictionStat,
+    GameTouches, GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Patrol,
+    PatrolAnimation, Player, PlayerAnimations, SlashSensor, Wall, Water,
 };
 use crate::constants;
 use bevy::prelude::*;
@@ -33,6 +33,26 @@ pub fn touch_input(
         .collect::<Vec<Vec2>>();
 }
 
+pub fn advance_patrol_animation(
+    time: Res<Time>,
+    mut query: Query<
+        (
+            &mut Sprite,
+            &mut AnimationState,
+            &mut TextureAtlas,
+            &PatrolAnimation,
+            &Velocity,
+        ),
+        (With<Enemy>, With<Patrol>),
+    >,
+) {
+    for (mut sprite, mut animation_state, mut atlas, animation, velocity) in &mut query {
+        sprite.flip_x = velocity.linvel.x <= 0.0;
+        animation_state.update(&animation.0, time.delta());
+        atlas.index = animation_state.frame_index();
+    }
+}
+
 pub fn update_player_animations(
     time: Res<Time>,
     mut query: Query<
@@ -59,7 +79,7 @@ pub fn update_player_animations(
         }
         if ground.on_ground {
             if velocity.linvel.x < -15.0 || velocity.linvel.x > 15.0 {
-                animation = &animations.walk;
+                animation = &animations.run;
             }
         } else if climbing.climbing {
             if velocity.linvel.y == 0.0 {
@@ -83,6 +103,15 @@ pub fn update_player_animations(
         }
 
         atlas.index = player.frame_index();
+    }
+}
+
+pub fn activate_slash(
+    input: Res<ButtonInput<KeyCode>>,
+    mut query: Query<&mut SlashSensor, With<Parent>>,
+) {
+    for mut sensor in &mut query {
+        sensor.slash_active = input.just_pressed(KeyCode::KeyJ);
     }
 }
 
@@ -123,10 +152,10 @@ pub fn player_movement(
         if climber.climbing {
             let up = if input.pressed(KeyCode::KeyW) { 1. } else { 0. };
             let down = if input.pressed(KeyCode::KeyS) { 1. } else { 0. };
-            velocity.linvel.y = (up - down) * 150.;
+            velocity.linvel.y = (up - down) * 100.;
         }
 
-        if input.just_pressed(KeyCode::Space) && (ground_detection.on_ground || climber.climbing) {
+        if input.pressed(KeyCode::Space) && (ground_detection.on_ground) {
             velocity.linvel.y = jump_force_stat.0;
         }
     }
@@ -197,30 +226,7 @@ pub fn spawn_ground_sensor(
     detect_ground_for: Query<(Entity, &Collider), Added<GroundDetection>>,
 ) {
     for (entity, shape) in &detect_ground_for {
-        if let Some(cuboid) = shape.as_cuboid() {
-            let Vec2 {
-                x: half_extents_x,
-                y: half_extents_y,
-            } = cuboid.half_extents();
-
-            let detector_shape = Collider::cuboid(half_extents_x / 2.0, 2.);
-
-            let sensor_translation = Vec3::new(0., -half_extents_y, 0.);
-            commands.entity(entity).with_children(|builder| {
-                builder
-                    .spawn_empty()
-                    .insert(ActiveEvents::COLLISION_EVENTS)
-                    .insert(ActiveCollisionTypes::all())
-                    .insert(detector_shape)
-                    .insert(Sensor)
-                    .insert(Transform::from_translation(sensor_translation))
-                    .insert(GlobalTransform::default())
-                    .insert(GroundSensor {
-                        ground_detection_entity: entity,
-                        intersecting_ground_entities: HashSet::new(),
-                    });
-            });
-        } else if let Some(round) = shape.as_capsule() {
+        if let Some(round) = shape.as_capsule() {
             let half_extents_x = round.radius();
             let half_extents_y = round.half_height() + half_extents_x;
 
@@ -241,6 +247,125 @@ pub fn spawn_ground_sensor(
                         intersecting_ground_entities: HashSet::new(),
                     });
             });
+        }
+    }
+}
+
+pub fn spawn_slash_sensor(
+    mut commands: Commands,
+    detect_ground_for: Query<(Entity, &Collider), Added<Player>>,
+    asset_server: Res<AssetServer>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+) {
+    for (entity, shape) in &detect_ground_for {
+        if let Some(round) = shape.as_capsule() {
+            let half_extents_x = round.radius();
+            let _half_extents_y = round.half_height() + half_extents_x;
+
+            let detector_shape = Collider::cuboid(8., 8.);
+
+            let sensor_translation = Vec3::new(half_extents_x * 2., 0., 5.);
+            commands.entity(entity).with_children(|builder| {
+                builder
+                    .spawn_empty()
+                    .insert(ActiveEvents::COLLISION_EVENTS)
+                    .insert(ActiveCollisionTypes::all())
+                    .insert(detector_shape)
+                    .insert(Sensor)
+                    .insert(Transform::from_translation(sensor_translation))
+                    .insert(GlobalTransform::default())
+                    .insert(SlashSensor {
+                        slash_active: false,
+                        slash_entity: entity,
+                        intersecting_shashables: HashSet::new(),
+                        sprite_sheet_bundle: SpriteSheetBundle {
+                            texture: asset_server.load("swoosh.png"),
+                            atlas: TextureAtlas {
+                                layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(
+                                    Vec2 { x: 32.0, y: 32.0 },
+                                    4,
+                                    1,
+                                    None,
+                                    None,
+                                )),
+                                index: 1,
+                            },
+                            transform: Transform::from_translation(sensor_translation).with_scale(
+                                Vec3 {
+                                    x: 8.,
+                                    y: 8.,
+                                    z: 8.,
+                                },
+                            ),
+                            visibility: Visibility::Visible,
+                            inherited_visibility: InheritedVisibility::VISIBLE,
+                            ..default()
+                        },
+                    });
+            });
+        }
+    }
+}
+
+pub fn update_slash_sensor_direction(
+    query: Query<&Sprite, With<Player>>,
+    mut children: Query<&mut Transform, (With<SlashSensor>, With<Parent>)>,
+) {
+    if let Ok(sprite) = query.get_single() {
+        for mut transform in &mut children {
+            if (sprite.flip_x && transform.translation.x > 0.0)
+                || (!sprite.flip_x && transform.translation.x < 0.0)
+            {
+                transform.translation.x *= -1.0;
+            }
+        }
+    }
+}
+
+pub fn update_slash_intersection(
+    mut slashes: Query<&mut SlashSensor>,
+    enemies: Query<Entity, With<Enemy>>,
+    mut collisions: EventReader<CollisionEvent>,
+) {
+    for collision in collisions.read() {
+        match collision {
+            CollisionEvent::Started(collider_a, collider_b, _) => {
+                if let (Ok(mut slash), Ok(enemy)) =
+                    (slashes.get_mut(*collider_a), enemies.get(*collider_b))
+                {
+                    slash.intersecting_shashables.insert(enemy);
+                }
+                if let (Ok(mut slash), Ok(enemy)) =
+                    (slashes.get_mut(*collider_b), enemies.get(*collider_a))
+                {
+                    slash.intersecting_shashables.insert(enemy);
+                };
+            }
+            CollisionEvent::Stopped(collider_a, collider_b, _) => {
+                if let (Ok(mut slash), Ok(enemy)) =
+                    (slashes.get_mut(*collider_a), enemies.get(*collider_b))
+                {
+                    slash.intersecting_shashables.remove(&enemy);
+                }
+
+                if let (Ok(mut slash), Ok(enemy)) =
+                    (slashes.get_mut(*collider_b), enemies.get(*collider_a))
+                {
+                    slash.intersecting_shashables.remove(&enemy);
+                }
+            }
+        }
+    }
+}
+
+pub fn slash_kill(mut cmd: Commands, query: Query<&SlashSensor>) {
+    for slash_sensor in &query {
+        for entity in &slash_sensor.intersecting_shashables {
+            if let Some(enemy) = cmd.get_entity(*entity) {
+                if slash_sensor.slash_active {
+                    enemy.despawn_recursive();
+                }
+            }
         }
     }
 }
@@ -341,6 +466,25 @@ pub fn check_touched_water(
                 player.is_dead = true;
             }
             if let (Ok(mut player), Ok(_)) = (player.get_mut(*collider_b), waters.get(*collider_a))
+            {
+                player.is_dead = true;
+            }
+        }
+    }
+}
+
+pub fn check_touched_enemy(
+    mut player: Query<&mut CanDie, With<Player>>,
+    enemies: Query<(Entity, &GlobalTransform), With<Enemy>>,
+    mut collisions: EventReader<CollisionEvent>,
+) {
+    for collision in collisions.read() {
+        if let CollisionEvent::Started(collider_a, collider_b, _) = collision {
+            if let (Ok(mut player), Ok(_)) = (player.get_mut(*collider_a), enemies.get(*collider_b))
+            {
+                player.is_dead = true;
+            }
+            if let (Ok(mut player), Ok(_)) = (player.get_mut(*collider_b), enemies.get(*collider_a))
             {
                 player.is_dead = true;
             }

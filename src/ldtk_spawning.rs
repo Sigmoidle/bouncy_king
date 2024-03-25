@@ -1,10 +1,11 @@
 use crate::components::{
-    AccelerationStat, CanDie, ColliderBundle, FakeGroundFrictionStat, Items, JumpForceStat,
-    MaxSpeedStat, Patrol, Player, PlayerAnimations, SensorBundle,
+    AccelerationStat, CanDie, ColliderBundle, Enemy, FakeGroundFrictionStat, IsLdtkEntity, Items,
+    JumpForceStat, MaxSpeedStat, Patrol, PatrolAnimation, Player, PlayerAnimations, SensorBundle,
 };
 use crate::constants::CollideEnums;
 use benimator::FrameRate;
 use bevy::prelude::*;
+use bevy::sprite::Anchor;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_ldtk::utils::ldtk_pixel_coords_to_translation_pivoted;
 use bevy_rapier2d::prelude::*;
@@ -44,7 +45,7 @@ impl From<&EntityInstance> for ColliderBundle {
 
         match entity_instance.identifier.as_ref() {
             "Player" => ColliderBundle {
-                collider: Collider::capsule_y(7., 7.),
+                collider: Collider::capsule_y(2., 6.),
                 rigid_body: RigidBody::Dynamic,
                 rotation_constraints,
                 active_events: ActiveEvents::COLLISION_EVENTS,
@@ -55,7 +56,7 @@ impl From<&EntityInstance> for ColliderBundle {
                 ..Default::default()
             },
             "Snake" => ColliderBundle {
-                collider: Collider::cuboid(8., 6.),
+                collider: Collider::cuboid(4., 4.),
                 rigid_body: RigidBody::KinematicVelocityBased,
                 rotation_constraints,
                 active_events: ActiveEvents::COLLISION_EVENTS,
@@ -89,12 +90,14 @@ impl LdtkEntity for Patrol {
         _: &mut Assets<TextureAtlasLayout>,
     ) -> Patrol {
         let mut points = Vec::new();
-        points.push(ldtk_pixel_coords_to_translation_pivoted(
-            entity_instance.px,
-            layer_instance.c_hei * layer_instance.grid_size,
-            IVec2::new(entity_instance.width, entity_instance.height),
-            entity_instance.pivot,
-        ));
+        points.push(
+            ldtk_pixel_coords_to_translation_pivoted(
+                entity_instance.px,
+                layer_instance.c_hei * layer_instance.grid_size,
+                IVec2::new(entity_instance.width, entity_instance.height),
+                entity_instance.pivot,
+            ) - Vec2 { x: 0.0, y: 8.0 },
+        );
 
         let ldtk_patrol_points = entity_instance
             .iter_points_field("patrol")
@@ -109,12 +112,14 @@ impl LdtkEntity for Patrol {
             let pixel_coords = (ldtk_point.as_vec2() + Vec2::new(0.5, 0.5))
                 * Vec2::splat(layer_instance.grid_size as f32);
 
-            points.push(ldtk_pixel_coords_to_translation_pivoted(
-                pixel_coords.as_ivec2(),
-                layer_instance.c_hei * layer_instance.grid_size,
-                IVec2::new(entity_instance.width, entity_instance.height),
-                entity_instance.pivot,
-            ));
+            points.push(
+                ldtk_pixel_coords_to_translation_pivoted(
+                    pixel_coords.as_ivec2(),
+                    layer_instance.c_hei * layer_instance.grid_size,
+                    IVec2::new(entity_instance.width, entity_instance.height),
+                    entity_instance.pivot,
+                ) - Vec2 { x: 0.0, y: 8.0 },
+            );
         }
 
         Patrol {
@@ -150,13 +155,45 @@ pub fn setup_player_components(mut cmd: Commands, query: Query<Entity, Added<Pla
                 .insert(player_animations)
                 .insert(ActiveCollisionTypes::all())
                 .insert(AccelerationStat(15.0))
-                .insert(MaxSpeedStat(Vec2 { x: 150.0, y: 400.0 }))
+                .insert(MaxSpeedStat(Vec2 { x: 100.0, y: 400.0 }))
                 .insert(JumpForceStat(400.0))
                 .insert(FakeGroundFrictionStat(-0.1))
                 .insert(CanDie {
                     is_dead: false,
                     dead_animation_timer: Timer::from_seconds(1.5, TimerMode::Once),
                 });
+        }
+    }
+}
+
+pub fn add_patrol_animation_enemy(
+    mut cmd: Commands,
+    query: Query<Entity, (Added<Enemy>, Added<Patrol>)>,
+) {
+    let o = 68;
+    let partrol_animation = PatrolAnimation(benimator::Animation::from_indices(
+        (o + 1)..=(o + 4),
+        FrameRate::from_fps(4.0),
+    ));
+    for entity in &query {
+        if let Some(mut entity_command) = cmd.get_entity(entity) {
+            entity_command.insert(partrol_animation.clone());
+        }
+    }
+}
+
+pub fn fix_sprite_translation(mut query: Query<&mut Sprite, Added<IsLdtkEntity>>) {
+    for mut sprite in &mut query {
+        sprite.anchor = Anchor::Custom(Vec2 { x: 0.0, y: -0.2 });
+    }
+}
+
+pub fn fix_enemy_hitbox(mut query: Query<&mut Transform, Added<Enemy>>) {
+    for mut transform in &mut query {
+        transform.translation -= Vec3 {
+            x: 0.0,
+            y: 8.0,
+            z: 0.0,
         }
     }
 }

@@ -61,7 +61,15 @@ fn main() {
         // - Startup systems
         .add_systems(Startup, (systems::setup, systems::setup_camera))
         // - Delayed startup systems (Due to the way LDTK loads stuff in)
-        .add_systems(Update, ldtk_spawning::setup_player_components)
+        .add_systems(
+            Update,
+            (
+                ldtk_spawning::setup_player_components,
+                ldtk_spawning::fix_enemy_hitbox,
+                ldtk_spawning::fix_sprite_translation,
+                ldtk_spawning::add_patrol_animation_enemy,
+            ),
+        )
         // - Update systems
         .add_systems(
             Update,
@@ -85,6 +93,19 @@ fn main() {
                 systems::check_touched_water,
                 systems::on_dead,
                 systems::patrol,
+                systems::advance_patrol_animation,
+            ),
+        )
+        // - More Update systems
+        .add_systems(
+            Update,
+            (
+                systems::check_touched_enemy,
+                systems::spawn_slash_sensor,
+                systems::update_slash_sensor_direction,
+                systems::update_slash_intersection,
+                systems::slash_kill,
+                systems::activate_slash,
             ),
         )
         // # Plugins

@@ -69,9 +69,10 @@ pub struct PlayerBundle {
     // The whole EntityInstance can be stored directly as an EntityInstance component
     #[from_entity_instance]
     entity_instance: EntityInstance,
+    pub entity: IsLdtkEntity,
 }
 
-#[derive(Clone, Default, Bundle, LdtkEntity)]
+#[derive(Default, Bundle, LdtkEntity)]
 pub struct MobBundle {
     #[sprite_sheet_bundle]
     pub sprite_sheet_bundle: SpriteSheetBundle,
@@ -80,6 +81,9 @@ pub struct MobBundle {
     pub enemy: Enemy,
     #[ldtk_entity]
     pub patrol: Patrol,
+    pub entity: IsLdtkEntity,
+    // Animation components
+    animation_state: AnimationState,
 }
 
 // Components
@@ -102,6 +106,9 @@ pub struct PlayerAnimations {
     pub climb: benimator::Animation,
 }
 
+#[derive(Component, Clone)]
+pub struct PatrolAnimation(pub benimator::Animation);
+
 #[derive(Default, Component, Deref, DerefMut)]
 pub struct AnimationState(pub benimator::State);
 
@@ -112,6 +119,14 @@ pub struct Climbable;
 pub struct GroundSensor {
     pub ground_detection_entity: Entity,
     pub intersecting_ground_entities: HashSet<Entity>,
+}
+
+#[derive(Component)]
+pub struct SlashSensor {
+    pub slash_active: bool,
+    pub slash_entity: Entity,
+    pub intersecting_shashables: HashSet<Entity>,
+    pub sprite_sheet_bundle: SpriteSheetBundle,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
@@ -164,3 +179,6 @@ pub struct Patrol {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]
 pub struct Enemy;
+
+#[derive(Copy, Clone, Debug, Default, Component)]
+pub struct IsLdtkEntity;
