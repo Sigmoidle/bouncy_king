@@ -3,7 +3,7 @@ use crate::components::{
     GameTouches, GroundDetection, GroundSensor, JumpForceStat, MaxSpeedStat, Patrol,
     PatrolAnimation, Player, PlayerAnimations, SlashSensor, Wall, Water,
 };
-use crate::constants;
+use crate::{constants, GameAssets};
 use bevy::prelude::*;
 use bevy_ecs_ldtk::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -253,11 +253,11 @@ pub fn spawn_ground_sensor(
 
 pub fn spawn_slash_sensor(
     mut commands: Commands,
-    detect_ground_for: Query<(Entity, &Collider), Added<Player>>,
-    asset_server: Res<AssetServer>,
+    slash_for: Query<(Entity, &Collider), Added<Player>>,
+    game_assets: Res<GameAssets>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    for (entity, shape) in &detect_ground_for {
+    for (entity, shape) in &slash_for {
         if let Some(round) = shape.as_capsule() {
             let half_extents_x = round.radius();
             let _half_extents_y = round.half_height() + half_extents_x;
@@ -265,6 +265,7 @@ pub fn spawn_slash_sensor(
             let detector_shape = Collider::cuboid(8., 8.);
 
             let sensor_translation = Vec3::new(half_extents_x * 2., 0., 5.);
+
             commands.entity(entity).with_children(|builder| {
                 builder
                     .spawn_empty()
@@ -272,35 +273,35 @@ pub fn spawn_slash_sensor(
                     .insert(ActiveCollisionTypes::all())
                     .insert(detector_shape)
                     .insert(Sensor)
-                    .insert(Transform::from_translation(sensor_translation))
-                    .insert(GlobalTransform::default())
+                    .insert(SpriteSheetBundle {
+                        sprite: Sprite {
+                            custom_size: Some(Vec2 { x: 16., y: 16. }),
+                            ..default()
+                        },
+                        texture: game_assets.slash.clone(),
+                        atlas: TextureAtlas {
+                            layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(
+                                Vec2 { x: 32.0, y: 32.0 },
+                                4,
+                                1,
+                                None,
+                                None,
+                            )),
+                            index: 1,
+                        },
+                        transform: Transform::from_translation(sensor_translation).with_scale(
+                            Vec3 {
+                                x: 1.,
+                                y: 1.,
+                                z: 8.,
+                            },
+                        ),
+                        ..default()
+                    })
                     .insert(SlashSensor {
                         slash_active: false,
                         slash_entity: entity,
                         intersecting_shashables: HashSet::new(),
-                        sprite_sheet_bundle: SpriteSheetBundle {
-                            texture: asset_server.load("swoosh.png"),
-                            atlas: TextureAtlas {
-                                layout: texture_atlas_layouts.add(TextureAtlasLayout::from_grid(
-                                    Vec2 { x: 32.0, y: 32.0 },
-                                    4,
-                                    1,
-                                    None,
-                                    None,
-                                )),
-                                index: 1,
-                            },
-                            transform: Transform::from_translation(sensor_translation).with_scale(
-                                Vec3 {
-                                    x: 8.,
-                                    y: 8.,
-                                    z: 8.,
-                                },
-                            ),
-                            visibility: Visibility::Visible,
-                            inherited_visibility: InheritedVisibility::VISIBLE,
-                            ..default()
-                        },
                     });
             });
         }

@@ -126,7 +126,6 @@ pub struct SlashSensor {
     pub slash_active: bool,
     pub slash_entity: Entity,
     pub intersecting_shashables: HashSet<Entity>,
-    pub sprite_sheet_bundle: SpriteSheetBundle,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Component)]

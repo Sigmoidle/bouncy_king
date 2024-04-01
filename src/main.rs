@@ -3,6 +3,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::too_many_lines)]
 
 use bevy::{asset::AssetMetaCheck, prelude::*, window::WindowResolution};
 use bevy_ecs_ldtk::prelude::*;
@@ -59,7 +60,10 @@ fn main() {
         )
         // # Systems
         // - Startup systems
-        .add_systems(Startup, (systems::setup, systems::setup_camera))
+        .add_systems(
+            Startup,
+            (setup_game_assets, systems::setup, systems::setup_camera).chain(),
+        )
         // - Delayed startup systems (Due to the way LDTK loads stuff in)
         .add_systems(
             Update,
@@ -132,4 +136,15 @@ fn main() {
             debug::add_plugin,
         ))
         .run();
+}
+
+#[derive(Resource)]
+struct GameAssets {
+    slash: Handle<Image>,
+}
+
+fn setup_game_assets(mut cmd: Commands, asset_server: Res<AssetServer>) {
+    cmd.insert_resource(GameAssets {
+        slash: asset_server.load("swoosh.png"),
+    });
 }
